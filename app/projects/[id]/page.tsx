@@ -1,5 +1,7 @@
 'use client'
 
+export const runtime = 'edge'
+
 import { AppShell } from '@/components/layout/AppShell'
 import { ProjectDetailScreen } from '@/features/projects/ProjectDetailScreen'
 import { use } from 'react'

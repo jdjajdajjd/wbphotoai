@@ -1,3 +1,5 @@
+export const runtime = 'edge'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { MOCK_PAYMENTS } from '@/lib/mock-data'
 
