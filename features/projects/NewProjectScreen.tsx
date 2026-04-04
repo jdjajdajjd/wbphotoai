@@ -24,6 +24,7 @@ export function NewProjectScreen() {
   const [selectedPackageId, setSelectedPackageId] = useState('pkg_pro')
   const [files, setFiles] = useState<File[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState('')
 
   const onDrop = useCallback((accepted: File[]) => {
     setFiles((prev) => {
@@ -68,12 +69,28 @@ export function NewProjectScreen() {
 
     setIsSubmitting(true)
     try {
+      // Upload files to Supabase Storage
+      const uploadedUrls: string[] = []
+      for (let i = 0; i < files.length; i++) {
+        setUploadProgress(`Загружаем фото ${i + 1} из ${files.length}...`)
+        const fd = new FormData()
+        fd.append('file', files[i])
+        const res = await fetch('/api/upload', { method: 'POST', body: fd })
+        const data = await res.json()
+        if (data.url) {
+          uploadedUrls.push(data.url)
+        } else {
+          throw new Error(data.error || 'Upload failed')
+        }
+      }
+
+      setUploadProgress('')
       const newProject = {
         id: `proj_${Date.now()}`,
         userId: 'user_demo',
         title,
         category: category || undefined,
-        sourceImages: files.map((f) => URL.createObjectURL(f)),
+        sourceImages: uploadedUrls,
         selectedOperations: selectedOps,
         packageId: selectedPackageId,
         package: selectedPkg,
@@ -86,8 +103,10 @@ export function NewProjectScreen() {
       addProject(newProject)
       toast.success('Проект создан!', { icon: '🚀' })
       router.push(`/payments?package=${selectedPackageId}&project=${newProject.id}`)
-    } catch {
-      toast.error('Ошибка при создании проекта')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Ошибка при создании проекта'
+      toast.error(msg)
+      setUploadProgress('')
     } finally {
       setIsSubmitting(false)
     }
@@ -281,7 +300,7 @@ export function NewProjectScreen() {
             loading={isSubmitting}
             disabled={files.length === 0 || !title.trim()}
           >
-            Перейти к оплате <ArrowRight className="w-4 h-4" />
+            {uploadProgress || (<>Перейти к оплате <ArrowRight className="w-4 h-4" /></>)}
           </GradientButton>
         </GlassCard>
       </div>
