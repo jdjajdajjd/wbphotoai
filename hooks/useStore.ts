@@ -2,26 +2,23 @@
 
 import { create } from 'zustand'
 import type { User, Project, Payment } from '@/types'
-import { MOCK_USER } from '@/lib/mock-data'
+import { MOCK_USER, MOCK_PROJECTS, MOCK_PAYMENTS } from '@/lib/mock-data'
 
 interface AppStore {
-  // Session
   currentUser: User | null
   setCurrentUser: (user: User) => void
   updateCredits: (credits: number) => void
 
-  // Projects
   projects: Project[]
   setProjects: (projects: Project[]) => void
   addProject: (project: Project) => void
   updateProject: (id: string, data: Partial<Project>) => void
 
-  // Payments
   payments: Payment[]
   setPayments: (payments: Payment[]) => void
   addPayment: (payment: Payment) => void
+  updatePayment: (id: string, data: Partial<Payment>) => void
 
-  // UI state
   isLoading: boolean
   setLoading: (v: boolean) => void
 }
@@ -34,7 +31,8 @@ export const useStore = create<AppStore>((set) => ({
       currentUser: state.currentUser ? { ...state.currentUser, credits } : null,
     })),
 
-  projects: [],
+  // Initialize with mock data so list screens are populated immediately
+  projects: MOCK_PROJECTS,
   setProjects: (projects) => set({ projects }),
   addProject: (project) => set((state) => ({ projects: [project, ...state.projects] })),
   updateProject: (id, data) =>
@@ -42,9 +40,13 @@ export const useStore = create<AppStore>((set) => ({
       projects: state.projects.map((p) => (p.id === id ? { ...p, ...data } : p)),
     })),
 
-  payments: [],
+  payments: MOCK_PAYMENTS,
   setPayments: (payments) => set({ payments }),
   addPayment: (payment) => set((state) => ({ payments: [payment, ...state.payments] })),
+  updatePayment: (id, data) =>
+    set((state) => ({
+      payments: state.payments.map((p) => (p.id === id ? { ...p, ...data } : p)),
+    })),
 
   isLoading: false,
   setLoading: (v) => set({ isLoading: v }),

@@ -8,7 +8,6 @@ import { CreditBadge } from '@/components/ui/CreditBadge'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { useStore } from '@/hooks/useStore'
 import { useTelegram } from '@/hooks/useTelegram'
-import { MOCK_PROJECTS } from '@/lib/mock-data'
 import { formatRub, formatDateShort, truncate } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useState } from 'react'
@@ -19,11 +18,13 @@ export function DashboardScreen() {
   const { currentUser, updateCredits, addPayment } = useStore()
   const [testPayLoading, setTestPayLoading] = useState(false)
 
-  const recentProjects = MOCK_PROJECTS.slice(0, 3)
+  const { projects } = useStore()
+  const recentProjects = projects.slice(0, 3)
 
+  const doneCount = projects.filter(p => p.status === 'done').length
   const stats = [
-    { label: 'Проектов', value: '3', icon: FolderOpen, color: 'text-blue-400' },
-    { label: 'Обработок', value: '12', icon: ImageIcon, color: 'text-purple-400' },
+    { label: 'Проектов', value: projects.length.toString(), icon: FolderOpen, color: 'text-blue-400' },
+    { label: 'Готово', value: doneCount.toString(), icon: ImageIcon, color: 'text-purple-400' },
     { label: 'Кредиты', value: currentUser?.credits?.toString() ?? '0', icon: Zap, color: 'text-green-400' },
   ]
 

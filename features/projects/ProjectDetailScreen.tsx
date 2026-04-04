@@ -5,7 +5,7 @@ import { ArrowLeft, ImageIcon, Download, Sparkles, CheckCircle2, Clock, XCircle,
 import { GlassCard } from '@/components/ui/GlassCard'
 import { GradientButton } from '@/components/ui/GradientButton'
 import { StatusPill } from '@/components/ui/StatusPill'
-import { MOCK_PROJECTS } from '@/lib/mock-data'
+import { useStore } from '@/hooks/useStore'
 import { OPERATIONS } from '@/lib/constants'
 import { formatRub, formatDate } from '@/lib/utils'
 import { useState } from 'react'
@@ -15,16 +15,29 @@ const MOCK_RESULT_IMAGES = ['/demo/result-1.jpg', '/demo/result-2.jpg', '/demo/r
 
 export function ProjectDetailScreen({ projectId }: { projectId: string }) {
   const router = useRouter()
-  const project = MOCK_PROJECTS.find((p) => p.id === projectId) ?? MOCK_PROJECTS[0]
+  const { projects, updateProject } = useStore()
+  const project = projects.find((p) => p.id === projectId) ?? projects[0]
   const [isProcessing, setIsProcessing] = useState(false)
-  const [processed, setProcessed] = useState(project.status === 'done')
+  const [processed, setProcessed] = useState(project?.status === 'done')
 
   async function handleProcess() {
     setIsProcessing(true)
     await new Promise((r) => setTimeout(r, 3000))
     setIsProcessing(false)
     setProcessed(true)
+    updateProject(projectId, { status: 'done', resultImages: MOCK_RESULT_IMAGES })
     toast.success('Генерация завершена! Результаты готовы.', { icon: '✨' })
+  }
+
+  if (!project) {
+    return (
+      <div className="px-4 pt-6 text-center">
+        <p className="text-white/40 text-sm mt-20">Проект не найден</p>
+        <button onClick={() => router.push('/projects')} className="text-green-400 text-sm mt-3">
+          ← Назад к проектам
+        </button>
+      </div>
+    )
   }
 
   const statusIcon = {

@@ -5,19 +5,19 @@ import { Plus, FolderOpen, ImageIcon, ArrowRight } from 'lucide-react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { GradientButton } from '@/components/ui/GradientButton'
 import { StatusPill } from '@/components/ui/StatusPill'
-import { MOCK_PROJECTS } from '@/lib/mock-data'
+import { useStore } from '@/hooks/useStore'
 import { formatRub, formatDate } from '@/lib/utils'
 
 export function ProjectsScreen() {
   const router = useRouter()
+  const { projects } = useStore()
 
   return (
     <div className="px-4 pt-6">
-      {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-xl font-bold text-white">Проекты</h1>
-          <p className="text-white/40 text-xs">{MOCK_PROJECTS.length} всего</p>
+          <p className="text-white/40 text-xs">{projects.length} всего</p>
         </div>
         <GradientButton size="sm" onClick={() => router.push('/projects/new')}>
           <Plus className="w-4 h-4" />
@@ -25,7 +25,7 @@ export function ProjectsScreen() {
         </GradientButton>
       </div>
 
-      {MOCK_PROJECTS.length === 0 ? (
+      {projects.length === 0 ? (
         <GlassCard className="text-center py-12">
           <FolderOpen className="w-12 h-12 text-white/15 mx-auto mb-3" />
           <p className="text-white/40 text-sm">Проектов пока нет</p>
@@ -41,7 +41,7 @@ export function ProjectsScreen() {
         </GlassCard>
       ) : (
         <div className="space-y-3 pb-28">
-          {MOCK_PROJECTS.map((project) => (
+          {projects.map((project) => (
             <GlassCard
               key={project.id}
               hoverable
@@ -49,7 +49,6 @@ export function ProjectsScreen() {
               onClick={() => router.push(`/projects/${project.id}`)}
             >
               <div className="flex items-start gap-3">
-                {/* Thumbnail */}
                 <div className="w-14 h-14 rounded-xl overflow-hidden bg-white/5 flex-shrink-0 border border-white/8 flex items-center justify-center">
                   <ImageIcon className="w-5 h-5 text-white/20" />
                 </div>
@@ -72,14 +71,13 @@ export function ProjectsScreen() {
                     <span className="text-green-400/70">{formatRub(project.priceRub)}</span>
                   </div>
 
-                  {/* Operations pills */}
                   <div className="flex flex-wrap gap-1 mt-2">
                     {project.selectedOperations.slice(0, 3).map((op) => (
                       <span
                         key={op}
                         className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/6 text-white/45 border border-white/8"
                       >
-                        {op.replace('_', ' ')}
+                        {op.replace(/_/g, ' ')}
                       </span>
                     ))}
                     {project.selectedOperations.length > 3 && (

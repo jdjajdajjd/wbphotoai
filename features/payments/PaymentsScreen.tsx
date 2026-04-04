@@ -6,7 +6,7 @@ import { ArrowLeft, Copy, Star, Zap, CheckCircle2, Clock, AlertCircle } from 'lu
 import { GlassCard } from '@/components/ui/GlassCard'
 import { GradientButton } from '@/components/ui/GradientButton'
 import { StatusPill } from '@/components/ui/StatusPill'
-import { MOCK_PAYMENTS, MOCK_PACKAGES } from '@/lib/mock-data'
+import { MOCK_PACKAGES } from '@/lib/mock-data'
 import { MANUAL_PAYMENT_DETAILS, PAYMENT_METHOD_LABELS } from '@/lib/constants'
 import { formatRub, formatDate } from '@/lib/utils'
 import { useStore } from '@/hooks/useStore'
@@ -21,7 +21,7 @@ export function PaymentsScreen() {
   const projectId = searchParams.get('project')
   const methodParam = searchParams.get('method')
 
-  const { updateCredits, currentUser, addPayment } = useStore()
+  const { updateCredits, currentUser, addPayment, updateProject, payments } = useStore()
 
   const [tab, setTab] = useState<Tab>(packageId ? 'pay' : 'history')
   const [payMethod, setPayMethod] = useState<'manual' | 'stars'>(
@@ -38,6 +38,10 @@ export function PaymentsScreen() {
 
   function copyToClipboard(text: string, label: string) {
     navigator.clipboard.writeText(text).then(() => toast.success(`${label} скопирован`))
+  }
+
+  function markProjectPaid(status: 'payment_review' | 'paid') {
+    if (projectId) updateProject(projectId, { status })
   }
 
   async function handleManualSubmit() {
@@ -59,6 +63,7 @@ export function PaymentsScreen() {
           payerComment,
         }),
       })
+      markProjectPaid('payment_review')
       setSubmitted(true)
       toast.success('Заявка отправлена на проверку!', { icon: '⏳', duration: 5000 })
     } catch {
@@ -73,8 +78,13 @@ export function PaymentsScreen() {
     await new Promise((r) => setTimeout(r, 1500))
     setStarsLoading(false)
     updateCredits((currentUser?.credits ?? 0) + selectedPkg.credits)
+    markProjectPaid('paid')
     toast.success(`Оплачено Stars! +${selectedPkg.credits} кредитов`, { icon: '⭐' })
-    setTimeout(() => router.push('/projects'), 1500)
+    if (projectId) {
+      setTimeout(() => router.push(`/projects/${projectId}`), 1200)
+    } else {
+      setTimeout(() => router.push('/projects'), 1200)
+    }
   }
 
   async function handleTestPayment() {
@@ -84,8 +94,13 @@ export function PaymentsScreen() {
       const data = await res.json()
       if (data.success) {
         updateCredits((currentUser?.credits ?? 0) + selectedPkg.credits)
-        toast.success(`Тестовая оплата! +${selectedPkg.credits} кредитов`, { icon: '⚡' })
-        setTimeout(() => router.push('/projects'), 1500)
+        markProjectPaid('paid')
+        toast.success(`Тестовая оплата прошла! +${selectedPkg.credits} кредитов`, { icon: '⚡' })
+        if (projectId) {
+          setTimeout(() => router.push(`/projects/${projectId}`), 1200)
+        } else {
+          setTimeout(() => router.push('/projects'), 1200)
+        }
       }
     } catch {
       toast.error('Ошибка тестовой оплаты')
@@ -313,13 +328,13 @@ export function PaymentsScreen() {
       {/* History tab */}
       {tab === 'history' && (
         <div className="space-y-3">
-          {MOCK_PAYMENTS.length === 0 ? (
+          {payments.length === 0 ? (
             <GlassCard className="text-center py-10">
               <AlertCircle className="w-10 h-10 text-white/15 mx-auto mb-2" />
               <p className="text-white/40 text-sm">Платежей пока нет</p>
             </GlassCard>
           ) : (
-            MOCK_PAYMENTS.map((payment) => (
+            payments.map((payment) => (
               <GlassCard key={payment.id} padding="md">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1">
