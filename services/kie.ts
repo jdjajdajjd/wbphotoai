@@ -1,180 +1,178 @@
 /**
  * KIE.AI Service Layer
+ * Docs: https://docs.kie.ai/
+ * Base: https://api.kie.ai/api/v1
  *
- * TODO: Replace mock implementations with real KIE.ai API calls.
- * Real endpoints: https://api.kie.ai/v1/...
- * Set KIE_API_KEY in .env to enable real API calls.
- *
- * Mock mode is used when KIE_API_KEY is not set.
+ * API is async: createTask → get taskId → poll recordInfo until state = 'success'
+ * Mock mode activates automatically when KIE_API_KEY is not set.
  */
 
 const KIE_API_KEY = process.env.KIE_API_KEY
-const KIE_BASE_URL = process.env.KIE_BASE_URL || 'https://api.kie.ai/v1'
+const KIE_BASE = 'https://api.kie.ai/api/v1'
 
 const isRealMode = !!KIE_API_KEY
 
-async function kieRequest(endpoint: string, body: object) {
-  const response = await fetch(`${KIE_BASE_URL}${endpoint}`, {
+// ─── Core request helpers ────────────────────────────────────────────────────
+
+async function createTask(model: string, input: object): Promise<string> {
+  const res = await fetch(`${KIE_BASE}/jobs/createTask`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${KIE_API_KEY}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ model, input }),
   })
-  if (!response.ok) {
-    throw new Error(`KIE API error: ${response.status} ${response.statusText}`)
+  const data = await res.json()
+  if (data.code !== 200) throw new Error(`KIE createTask error: ${data.msg}`)
+  return data.data.taskId
+}
+
+async function getTaskResult(taskId: string): Promise<string | null> {
+  const res = await fetch(`${KIE_BASE}/jobs/recordInfo?taskId=${taskId}`, {
+    headers: { Authorization: `Bearer ${KIE_API_KEY}` },
+  })
+  const data = await res.json()
+  if (data.code !== 200) throw new Error(`KIE recordInfo error: ${data.msg}`)
+
+  const { state, resultJson } = data.data
+  if (state === 'success' && resultJson) {
+    const parsed = JSON.parse(resultJson)
+    return parsed.resultUrls?.[0] ?? parsed.resultImageUrl ?? null
   }
-  return response.json()
+  if (state === 'fail') throw new Error('KIE task failed')
+  return null // still processing
 }
 
-// Mock delay to simulate async processing
-function mockDelay(ms = 1500) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+/** Poll until done or timeout (max ~3 minutes) */
+async function pollTask(taskId: string, intervalMs = 3000, maxAttempts = 60): Promise<string> {
+  for (let i = 0; i < maxAttempts; i++) {
+    await new Promise(r => setTimeout(r, intervalMs))
+    const url = await getTaskResult(taskId)
+    if (url) return url
+  }
+  throw new Error('KIE task timed out')
 }
 
-// Mock result images
-const MOCK_RESULT_IMAGES = [
-  '/demo/result-1.jpg',
-  '/demo/result-2.jpg',
-  '/demo/result-3.jpg',
-]
+// ─── Mock helpers ────────────────────────────────────────────────────────────
 
-export interface ProcessResult {
-  success: boolean
-  resultUrl?: string
-  error?: string
-}
+const MOCK_RESULTS = ['/demo/result-1.jpg', '/demo/result-2.jpg', '/demo/result-3.jpg']
+function mockDelay(ms = 2000) { return new Promise(r => setTimeout(r, ms)) }
 
-export interface GenerateTextResult {
-  success: boolean
-  text?: string
-  error?: string
+// ─── Public API ──────────────────────────────────────────────────────────────
+
+export interface TaskInfo {
+  taskId: string
+  model: string
 }
 
 /**
- * Remove background from product image.
- * TODO: Map to real KIE.ai endpoint: POST /remove-background
+ * Start remove-background task. Returns taskId for polling.
+ * Model: recraft/remove-background
+ * Input image: public URL, PNG/JPG/WEBP, max 5MB
  */
-export async function removeBackground(imageUrl: string): Promise<ProcessResult> {
+export async function startRemoveBackground(imageUrl: string): Promise<TaskInfo> {
+  if (!isRealMode) {
+    return { taskId: `mock_${Date.now()}`, model: 'recraft/remove-background' }
+  }
+  const taskId = await createTask('recraft/remove-background', { image: imageUrl })
+  return { taskId, model: 'recraft/remove-background' }
+}
+
+/**
+ * Start upscale task. Returns taskId for polling.
+ * Model: recraft/crisp-upscale
+ * Input image: public URL, JPEG/PNG/WEBP, max 10MB
+ */
+export async function startUpscale(imageUrl: string): Promise<TaskInfo> {
+  if (!isRealMode) {
+    return { taskId: `mock_${Date.now()}`, model: 'recraft/crisp-upscale' }
+  }
+  const taskId = await createTask('recraft/crisp-upscale', { image: imageUrl })
+  return { taskId, model: 'recraft/crisp-upscale' }
+}
+
+/**
+ * Poll task status.
+ * Returns: { state, resultUrl }
+ * state: 'waiting' | 'generating' | 'success' | 'fail'
+ */
+export async function checkTask(taskId: string): Promise<{
+  state: string
+  resultUrl?: string
+}> {
+  if (!isRealMode || taskId.startsWith('mock_')) {
+    // Simulate: after 6 seconds mock is "done"
+    const age = Date.now() - parseInt(taskId.replace('mock_', ''))
+    if (age > 6000) {
+      return { state: 'success', resultUrl: MOCK_RESULTS[Math.floor(Math.random() * MOCK_RESULTS.length)] }
+    }
+    return { state: 'generating' }
+  }
+
+  const res = await fetch(`${KIE_BASE}/jobs/recordInfo?taskId=${taskId}`, {
+    headers: { Authorization: `Bearer ${KIE_API_KEY}` },
+  })
+  const data = await res.json()
+  if (data.code !== 200) return { state: 'fail' }
+
+  const { state, resultJson } = data.data
+  if (state === 'success' && resultJson) {
+    const parsed = JSON.parse(resultJson)
+    const resultUrl = parsed.resultUrls?.[0] ?? parsed.resultImageUrl ?? undefined
+    return { state: 'success', resultUrl }
+  }
+  return { state: state ?? 'generating' }
+}
+
+/**
+ * Run remove-background and wait for result.
+ * Use only in server-side contexts with enough timeout.
+ */
+export async function removeBackground(imageUrl: string): Promise<string | null> {
   if (!isRealMode) {
     await mockDelay(2000)
-    return { success: true, resultUrl: '/demo/result-1.jpg' }
+    return MOCK_RESULTS[0]
   }
-  // TODO: replace with real endpoint
-  const result = await kieRequest('/remove-background', { imageUrl })
-  return { success: true, resultUrl: result.outputUrl }
+  const taskId = await createTask('recraft/remove-background', { image: imageUrl })
+  return pollTask(taskId)
 }
 
 /**
- * Upscale and enhance image quality.
- * TODO: Map to real KIE.ai endpoint: POST /upscale
+ * Run upscale and wait for result.
  */
-export async function upscaleImage(imageUrl: string): Promise<ProcessResult> {
+export async function upscaleImage(imageUrl: string): Promise<string | null> {
   if (!isRealMode) {
     await mockDelay(2500)
-    return { success: true, resultUrl: '/demo/result-2.jpg' }
+    return MOCK_RESULTS[1]
   }
-  // TODO: replace with real endpoint
-  const result = await kieRequest('/upscale', { imageUrl, scale: 2 })
-  return { success: true, resultUrl: result.outputUrl }
+  const taskId = await createTask('recraft/crisp-upscale', { image: imageUrl })
+  return pollTask(taskId)
 }
 
 /**
- * Generate a marketplace-ready product cover/banner.
- * TODO: Map to real KIE.ai endpoint: POST /generate-cover
- */
-export async function generateMarketplaceCover(
-  imageUrl: string,
-  prompt: string
-): Promise<ProcessResult> {
-  if (!isRealMode) {
-    await mockDelay(3000)
-    return { success: true, resultUrl: '/demo/result-3.jpg' }
-  }
-  // TODO: replace with real endpoint
-  const result = await kieRequest('/generate-cover', { imageUrl, prompt })
-  return { success: true, resultUrl: result.outputUrl }
-}
-
-/**
- * Generate SEO product title for marketplace.
- * TODO: Map to real KIE.ai endpoint: POST /generate-title
- */
-export async function generateTitle(productData: {
-  category?: string
-  description?: string
-  keywords?: string[]
-}): Promise<GenerateTextResult> {
-  if (!isRealMode) {
-    await mockDelay(1500)
-    return {
-      success: true,
-      text: `${productData.category || 'Товар'} — купить с доставкой по России | лучшая цена`,
-    }
-  }
-  // TODO: replace with real endpoint
-  const result = await kieRequest('/generate-title', productData)
-  return { success: true, text: result.title }
-}
-
-/**
- * Generate SEO product description for marketplace.
- * TODO: Map to real KIE.ai endpoint: POST /generate-description
- */
-export async function generateDescription(productData: {
-  title?: string
-  category?: string
-  features?: string[]
-}): Promise<GenerateTextResult> {
-  if (!isRealMode) {
-    await mockDelay(2000)
-    return {
-      success: true,
-      text: `Высококачественный товар категории "${productData.category || 'Общее'}". Отличается надёжностью и удобством использования. Подходит для ежедневного использования. Быстрая доставка по всей России.`,
-    }
-  }
-  // TODO: replace with real endpoint
-  const result = await kieRequest('/generate-description', productData)
-  return { success: true, text: result.description }
-}
-
-/**
- * Process a full project with all selected operations.
- * Returns array of result image URLs.
+ * Process project: run selected operations on all images.
+ * Returns array of result URLs.
  */
 export async function processProject(
   imageUrls: string[],
   operations: string[]
-): Promise<{ resultImages: string[]; generatedTitle?: string; generatedDescription?: string }> {
+): Promise<{ resultImages: string[] }> {
   if (!isRealMode) {
     await mockDelay(3000)
-    return {
-      resultImages: MOCK_RESULT_IMAGES,
-      generatedTitle: operations.includes('gen_title')
-        ? 'Качественный товар — купить онлайн | WBPhotoAI'
-        : undefined,
-      generatedDescription: operations.includes('gen_description')
-        ? 'Отличный продукт для вашего магазина. Профессиональные фото, высокое качество.'
-        : undefined,
-    }
+    return { resultImages: MOCK_RESULTS }
   }
 
   const results: string[] = []
   for (const imageUrl of imageUrls) {
     if (operations.includes('remove_bg')) {
-      const r = await removeBackground(imageUrl)
-      if (r.resultUrl) results.push(r.resultUrl)
+      const url = await removeBackground(imageUrl)
+      if (url) results.push(url)
     }
     if (operations.includes('upscale')) {
-      const r = await upscaleImage(imageUrl)
-      if (r.resultUrl) results.push(r.resultUrl)
-    }
-    if (operations.includes('cover')) {
-      const r = await generateMarketplaceCover(imageUrl, 'marketplace product cover')
-      if (r.resultUrl) results.push(r.resultUrl)
+      const url = await upscaleImage(imageUrl)
+      if (url) results.push(url)
     }
   }
-
   return { resultImages: results }
 }
