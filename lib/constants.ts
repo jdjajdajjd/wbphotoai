@@ -1,13 +1,14 @@
 import type { Operation } from '@/types'
 
 export const OPERATIONS: { id: Operation; label: string; hint: string; credits: number; icon: string }[] = [
-  { id: 'remove_bg', label: 'Убрать фон', hint: 'Чистый белый фон для маркетплейса', credits: 1, icon: '✂️' },
+  { id: 'remove_bg', label: 'Убрать фон', hint: 'Прозрачный PNG для маркетплейса', credits: 1, icon: '✂️' },
+  { id: 'white_bg', label: 'Белый фон', hint: 'Чистый белый фон вместо прозрачного', credits: 1, icon: '⬜' },
   { id: 'upscale', label: 'Улучшить качество', hint: 'Увеличить резкость и детали фото', credits: 1, icon: '✨' },
   { id: 'square_format', label: 'Квадрат 1:1', hint: 'Обрезка под формат карточки WB/Ozon', credits: 1, icon: '⬛' },
   { id: 'vertical_creative', label: 'Вертикальный баннер', hint: 'Рекламный креатив 4:5 для историй', credits: 2, icon: '📱' },
   { id: 'cover', label: 'Обложка карточки', hint: 'Главное фото с текстом и брендингом', credits: 2, icon: '🖼️' },
-  { id: 'gen_title', label: 'Заголовок товара', hint: 'SEO-заголовок для карточки товара', credits: 1, icon: '✍️' },
-  { id: 'gen_description', label: 'Описание товара', hint: 'Продающий текст для карточки', credits: 2, icon: '📝' },
+  { id: 'gen_title', label: 'Заголовок товара', hint: 'SEO-заголовок для WB/Ozon', credits: 1, icon: '✍️' },
+  { id: 'gen_description', label: 'Описание товара', hint: 'Продающий текст с характеристиками', credits: 2, icon: '📝' },
 ]
 
 export const CATEGORIES = [

@@ -1,10 +1,12 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ImageIcon, Download, Sparkles, CheckCircle2, Clock, XCircle, Loader2, ExternalLink } from 'lucide-react'
+import { useState } from 'react'
+import { ArrowLeft, ImageIcon, Sparkles, CheckCircle2, Clock, XCircle, Loader2, ExternalLink } from 'lucide-react'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { GradientButton } from '@/components/ui/GradientButton'
 import { StatusPill } from '@/components/ui/StatusPill'
+import { ImageViewer } from '@/components/ui/ImageViewer'
 import { useStore } from '@/hooks/useStore'
 import { useProcessing } from '@/hooks/useProcessing'
 import { OPERATIONS } from '@/lib/constants'
@@ -16,6 +18,8 @@ export function ProjectDetailScreen({ projectId }: { projectId: string }) {
   const { projects, updateProject } = useStore()
   const project = projects.find((p) => p.id === projectId) ?? projects[0]
   const { tasks, overallState, resultUrls, generatedTexts, startProcessing } = useProcessing()
+  const [viewerUrl, setViewerUrl] = useState<string | null>(null)
+  const [viewerIndex, setViewerIndex] = useState(0)
 
   if (!project) {
     return (
@@ -42,7 +46,7 @@ export function ProjectDetailScreen({ projectId }: { projectId: string }) {
     updateProject(projectId, { status: 'processing' })
     toast.info('Отправляем в обработку...', { icon: '🔄' })
 
-    await startProcessing(project.sourceImages, project.selectedOperations, project.title)
+    await startProcessing(project.sourceImages, project.selectedOperations, project.title, project.category)
 
     // will be set to done via overallState watcher below
     toast.success('Обработка запущена! Ожидайте результатов.', { icon: '✨' })
@@ -165,13 +169,16 @@ export function ProjectDetailScreen({ projectId }: { projectId: string }) {
         {isDone && displayResults.length > 0 && (
           <GlassCard padding="md">
             <div className="flex items-center justify-between mb-3">
-              <div className="text-xs text-white/40 font-medium">Результаты ({displayResults.length})</div>
+              <div className="text-xs text-white/40 font-medium">Фото-результаты ({displayResults.length})</div>
               <CheckCircle2 className="w-4 h-4 text-green-400" />
             </div>
             <div className="grid grid-cols-3 gap-2">
               {displayResults.map((url, i) => (
-                <a key={i} href={url} target="_blank" rel="noopener noreferrer"
-                  className="aspect-square rounded-xl overflow-hidden bg-white/5 border border-white/8 relative group block">
+                <button
+                  key={i}
+                  onClick={() => { setViewerUrl(url); setViewerIndex(i) }}
+                  className="aspect-square rounded-xl overflow-hidden bg-white/5 border border-white/8 relative group active:scale-95 transition-transform"
+                >
                   {url.startsWith('http') ? (
                     <img src={url} alt={`Result ${i + 1}`} className="w-full h-full object-cover" />
                   ) : (
@@ -179,32 +186,13 @@ export function ProjectDetailScreen({ projectId }: { projectId: string }) {
                       <Sparkles className="w-5 h-5 text-green-400/40" />
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <ExternalLink className="w-4 h-4 text-white" />
                   </div>
-                </a>
+                </button>
               ))}
             </div>
-            <GradientButton
-              variant="secondary"
-              fullWidth
-              size="md"
-              className="mt-3"
-              onClick={() => {
-                displayResults.forEach((url, i) => {
-                  if (url.startsWith('http')) {
-                    const a = document.createElement('a')
-                    a.href = url
-                    a.download = `result-${i + 1}.jpg`
-                    a.target = '_blank'
-                    a.click()
-                  }
-                })
-              }}
-            >
-              <Download className="w-4 h-4" />
-              Открыть результаты
-            </GradientButton>
+            <p className="text-center text-white/25 text-xs mt-3">Нажмите на фото, чтобы открыть</p>
           </GlassCard>
         )}
 
@@ -281,6 +269,41 @@ export function ProjectDetailScreen({ projectId }: { projectId: string }) {
           </>
         )}
       </div>
+
+      {/* Mock op results (non-text) */}
+      {isDone && tasks.some(t => t.resultText && t.operation !== 'gen_title' && t.operation !== 'gen_description') && (
+        <div className="mt-4 space-y-2 px-0">
+          {tasks
+            .filter(t => t.state === 'done' && t.resultText && t.operation !== 'gen_title' && t.operation !== 'gen_description')
+            .map(t => {
+              const def = OPERATIONS.find(o => o.id === t.operation)
+              return (
+                <div key={t.taskId} className="mx-0">
+                  <GlassCard padding="sm">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">{def?.icon}</span>
+                      <div>
+                        <div className="text-xs font-medium text-white/70">{def?.label}</div>
+                        <div className="text-xs text-white/40">{t.resultText}</div>
+                      </div>
+                      <CheckCircle2 className="w-4 h-4 text-green-400 ml-auto flex-shrink-0" />
+                    </div>
+                  </GlassCard>
+                </div>
+              )
+            })}
+        </div>
+      )}
+
+      {/* Image lightbox */}
+      {viewerUrl && (
+        <ImageViewer
+          url={viewerUrl}
+          onClose={() => setViewerUrl(null)}
+          index={viewerIndex}
+          total={displayResults.length}
+        />
+      )}
     </div>
   )
 }

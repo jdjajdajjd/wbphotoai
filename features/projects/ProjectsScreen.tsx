@@ -6,6 +6,7 @@ import { GlassCard } from '@/components/ui/GlassCard'
 import { GradientButton } from '@/components/ui/GradientButton'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { useStore } from '@/hooks/useStore'
+import { OPERATIONS } from '@/lib/constants'
 import { formatRub, formatDate } from '@/lib/utils'
 
 export function ProjectsScreen() {
@@ -50,7 +51,11 @@ export function ProjectsScreen() {
             >
               <div className="flex items-start gap-3">
                 <div className="w-14 h-14 rounded-xl overflow-hidden bg-white/5 flex-shrink-0 border border-white/8 flex items-center justify-center">
-                  <ImageIcon className="w-5 h-5 text-white/20" />
+                  {project.sourceImages[0]?.startsWith('http') ? (
+                    <img src={project.sourceImages[0]} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon className="w-5 h-5 text-white/20" />
+                  )}
                 </div>
 
                 <div className="flex-1 min-w-0">
@@ -72,14 +77,17 @@ export function ProjectsScreen() {
                   </div>
 
                   <div className="flex flex-wrap gap-1 mt-2">
-                    {project.selectedOperations.slice(0, 3).map((op) => (
-                      <span
-                        key={op}
-                        className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/6 text-white/45 border border-white/8"
-                      >
-                        {op.replace(/_/g, ' ')}
-                      </span>
-                    ))}
+                    {project.selectedOperations.slice(0, 3).map((op) => {
+                      const def = OPERATIONS.find(o => o.id === op)
+                      return (
+                        <span
+                          key={op}
+                          className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/6 text-white/45 border border-white/8"
+                        >
+                          {def ? `${def.icon} ${def.label}` : op}
+                        </span>
+                      )
+                    })}
                     {project.selectedOperations.length > 3 && (
                       <span className="px-1.5 py-0.5 rounded text-[9px] font-medium bg-white/6 text-white/35 border border-white/8">
                         +{project.selectedOperations.length - 3}

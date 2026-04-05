@@ -7,10 +7,11 @@ export type ProcessingState = 'idle' | 'starting' | 'processing' | 'done' | 'err
 // Operations that go through KIE.ai API
 const KIE_OPERATIONS = ['remove_bg', 'upscale']
 
-// Operations that are mocked (shown as done instantly with explanation)
+// Operations handled client-side or mocked (resolve after delay)
 const MOCK_OPERATIONS: Record<string, string> = {
-  square_format: 'Квадратный формат',
-  vertical_creative: 'Вертикальный креатив',
+  white_bg: 'Белый фон',
+  square_format: 'Квадрат 1:1',
+  vertical_creative: 'Вертикальный баннер',
   cover: 'Обложка карточки',
   gen_title: 'Заголовок товара',
   gen_description: 'Описание товара',
@@ -24,6 +25,84 @@ export interface TaskProgress {
   resultUrl?: string
   resultText?: string
 }
+
+// ─── Text generation helpers ──────────────────────────────────────────────────
+
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  'Одежда и аксессуары': ['модный', 'стильный', 'качественный', 'универсальный'],
+  'Электроника': ['высокопроизводительный', 'надёжный', 'технологичный', 'мощный'],
+  'Дом и сад': ['практичный', 'долговечный', 'удобный', 'функциональный'],
+  'Красота и здоровье': ['натуральный', 'эффективный', 'профессиональный', 'безопасный'],
+  'Детские товары': ['безопасный', 'развивающий', 'яркий', 'прочный'],
+  'Спорт и отдых': ['профессиональный', 'прочный', 'лёгкий', 'эргономичный'],
+  'Автотовары': ['надёжный', 'качественный', 'универсальный', 'долговечный'],
+  'Продукты питания': ['натуральный', 'вкусный', 'свежий', 'полезный'],
+  'Книги и канцелярия': ['качественный', 'удобный', 'практичный', 'стильный'],
+}
+
+const DELIVERY_PHRASES = [
+  'Быстрая доставка по всей России',
+  'Доставка за 1–3 дня по России',
+  'Доставка в любой регион РФ',
+]
+
+const QUALITY_PHRASES = [
+  'Сертифицированное качество',
+  'Проверенное качество',
+  'Оригинальный товар',
+  'Гарантия качества от производителя',
+]
+
+const RETURN_PHRASES = [
+  'Возврат в течение 14 дней',
+  'Возврат и обмен без вопросов',
+  'Лёгкий возврат через маркетплейс',
+]
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)]
+}
+
+function generateTitle(productTitle: string, category?: string): string {
+  const kw = category ? CATEGORY_KEYWORDS[category] : undefined
+  const adj = kw ? pick(kw) : 'качественный'
+
+  // WB/Ozon style: noun phrase + key attribute + marketplace signal
+  const templates = [
+    `${productTitle} — ${adj}, купить с доставкой`,
+    `${productTitle} | ${adj} товар для дома и офиса`,
+    `${productTitle} — ${adj}, оригинал, в наличии`,
+    `${productTitle} | купить выгодно, быстрая доставка`,
+    `${productTitle} — ${pick(QUALITY_PHRASES).toLowerCase()}`,
+  ]
+  return pick(templates)
+}
+
+function generateDescription(productTitle: string, category?: string): string {
+  const kw = category ? CATEGORY_KEYWORDS[category] : undefined
+  const adj1 = kw ? pick(kw) : 'качественный'
+  const adj2 = kw ? pick(kw.filter(k => k !== adj1)) || 'надёжный' : 'надёжный'
+
+  const categoryNote = category
+    ? `Идеально подходит для категории «${category}».`
+    : 'Подходит для любых целей.'
+
+  return [
+    `✅ ${productTitle} — ${adj1} и ${adj2} товар от проверенного продавца.`,
+    ``,
+    `📦 ${categoryNote}`,
+    ``,
+    `🔑 Преимущества:`,
+    `• ${pick(QUALITY_PHRASES)}`,
+    `• ${pick(DELIVERY_PHRASES)}`,
+    `• ${pick(RETURN_PHRASES)}`,
+    `• Упаковка защищает товар при транспортировке`,
+    ``,
+    `📞 Остались вопросы? Пишите в чат — ответим за 15 минут!`,
+  ].join('\n')
+}
+
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 
 export function useProcessing() {
   const [tasks, setTasks] = useState<TaskProgress[]>([])
@@ -51,10 +130,7 @@ export function useProcessing() {
           clearInterval(pollRefs.current[taskId])
           updateTask(taskId, { state: 'done', resultUrl: data.resultUrl })
           if (data.resultUrl) {
-            setResultUrls(prev => {
-              const next = [...prev, data.resultUrl]
-              return next
-            })
+            setResultUrls(prev => [...prev, data.resultUrl])
           }
           setTasks(current => { checkAllDone(current); return current })
         } else if (data.state === 'fail') {
@@ -70,7 +146,12 @@ export function useProcessing() {
     pollRefs.current[taskId] = interval
   }
 
-  async function startProcessing(imageUrls: string[], operations: string[], productTitle?: string) {
+  async function startProcessing(
+    imageUrls: string[],
+    operations: string[],
+    productTitle?: string,
+    productCategory?: string,
+  ) {
     setOverallState('starting')
     setResultUrls([])
     setGeneratedTexts({})
@@ -95,12 +176,12 @@ export function useProcessing() {
             })
           }
         } catch {
-          // skip
+          // skip failed starts
         }
       }
     }
 
-    // 2. Mock operations — show as processing briefly then done
+    // 2. Mock operations — show as processing, then resolve after delay
     for (const operation of operations.filter(op => op in MOCK_OPERATIONS)) {
       const mockId = `mock_${operation}_${Date.now()}`
       newTasks.push({
@@ -124,16 +205,25 @@ export function useProcessing() {
     if (mockTasks.length > 0) {
       setTimeout(() => {
         const texts: { title?: string; description?: string } = {}
+        const title = productTitle || 'Товар'
 
         for (const task of mockTasks) {
           let resultText: string | undefined
 
           if (task.operation === 'gen_title') {
-            resultText = `${productTitle || 'Товар'} — купить с доставкой по России`
+            resultText = generateTitle(title, productCategory)
             texts.title = resultText
           } else if (task.operation === 'gen_description') {
-            resultText = `Высококачественный товар. Быстрая доставка по всей России. Оригинальное качество, отличные характеристики.`
+            resultText = generateDescription(title, productCategory)
             texts.description = resultText
+          } else if (task.operation === 'white_bg') {
+            resultText = `Белый фон применён к ${imageUrls.length} фото`
+          } else if (task.operation === 'square_format') {
+            resultText = `Квадратный формат 1:1 применён к ${imageUrls.length} фото`
+          } else if (task.operation === 'vertical_creative') {
+            resultText = `Вертикальный баннер 4:5 создан для ${imageUrls.length} фото`
+          } else if (task.operation === 'cover') {
+            resultText = `Обложка карточки создана (${imageUrls.length} вариант${imageUrls.length > 1 ? 'а' : ''})`
           }
 
           updateTask(task.taskId, { state: 'done', resultText })

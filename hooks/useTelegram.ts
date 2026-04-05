@@ -41,6 +41,7 @@ interface TelegramWebApp {
   showAlert: (message: string, callback?: () => void) => void
   showConfirm: (message: string, callback: (ok: boolean) => void) => void
   openInvoice: (url: string, callback?: (status: string) => void) => void
+  openLink: (url: string, options?: { try_instant_view?: boolean }) => void
 }
 
 declare global {
@@ -105,5 +106,13 @@ export function useTelegram() {
     },
   }
 
-  return { webApp, user, isReady, isTelegram, haptic }
+  function openLink(url: string) {
+    if (webApp?.openLink) {
+      webApp.openLink(url)
+    } else {
+      window.open(url, '_blank')
+    }
+  }
+
+  return { webApp, user, isReady, isTelegram, haptic, openLink }
 }

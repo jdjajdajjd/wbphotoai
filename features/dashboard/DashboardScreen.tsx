@@ -169,8 +169,12 @@ export function DashboardScreen() {
             >
               <div className="flex items-center gap-3">
                 {/* Thumbnail */}
-                <div className="w-10 h-10 rounded-xl overflow-hidden bg-white/5 flex-shrink-0 flex items-center justify-center border border-white/8">
-                  <ImageIcon className="w-4 h-4 text-white/25" />
+                <div className="w-10 h-10 rounded-xl overflow-hidden bg-white/5 flex-shrink-0 border border-white/8 flex items-center justify-center">
+                  {project.sourceImages[0]?.startsWith('http') ? (
+                    <img src={project.sourceImages[0]} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <ImageIcon className="w-4 h-4 text-white/25" />
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">

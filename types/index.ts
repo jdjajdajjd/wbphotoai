@@ -18,6 +18,7 @@ export type TransactionType = 'topup' | 'spend' | 'refund'
 export type Operation =
   | 'remove_bg'
   | 'upscale'
+  | 'white_bg'
   | 'square_format'
   | 'vertical_creative'
   | 'cover'
