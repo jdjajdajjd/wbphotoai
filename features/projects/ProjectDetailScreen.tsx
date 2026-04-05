@@ -135,15 +135,25 @@ export function ProjectDetailScreen({ projectId }: { projectId: string }) {
             {project.selectedOperations.map((op) => {
               const def = OPERATIONS.find((o) => o.id === op)
               const task = tasks.find(t => t.operation === op)
+              const isSoon = def?.status === 'soon'
               return (
-                <div key={op} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20 text-xs text-green-300">
+                <div
+                  key={op}
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border ${
+                    isSoon
+                      ? 'bg-orange-500/8 border-orange-500/20 text-orange-300/60'
+                      : 'bg-green-500/10 border-green-500/20 text-green-300'
+                  }`}
+                >
                   <span>{def?.icon}</span>
                   <span>{def?.label || op}</span>
-                  {task && (
+                  {isSoon ? (
+                    <span className="text-[9px] text-orange-400/60 ml-0.5">скоро</span>
+                  ) : task ? (
                     task.state === 'processing' ? <Loader2 className="w-3 h-3 animate-spin ml-1" /> :
                     task.state === 'done' ? <CheckCircle2 className="w-3 h-3 text-green-400 ml-1" /> :
                     task.state === 'error' ? <XCircle className="w-3 h-3 text-red-400 ml-1" /> : null
-                  )}
+                  ) : null}
                 </div>
               )
             })}
@@ -199,32 +209,37 @@ export function ProjectDetailScreen({ projectId }: { projectId: string }) {
         {/* Generated texts */}
         {(generatedTexts.title || generatedTexts.description) && (
           <GlassCard padding="md">
-            <div className="text-xs text-white/40 font-medium mb-3">Сгенерированный контент</div>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="text-xs text-white/40 font-medium">Текстовый контент</div>
+            </div>
+            <div className="text-[10px] text-yellow-400/70 mb-3 bg-yellow-500/8 border border-yellow-500/15 rounded-lg px-2.5 py-1.5">
+              Шаблон — замените значения в [скобках] на данные вашего товара
+            </div>
             {generatedTexts.title && (
-              <div className="mb-3">
-                <div className="text-xs text-white/35 mb-1">✍️ Заголовок товара</div>
-                <div className="bg-white/5 border border-white/8 rounded-xl px-3 py-2 text-sm text-white/80 leading-snug">
+              <div className="mb-4">
+                <div className="text-xs text-white/35 mb-1.5">✍️ Заголовок товара</div>
+                <div className="bg-white/5 border border-white/8 rounded-xl px-3 py-2.5 text-xs text-white/80 leading-relaxed whitespace-pre-wrap font-mono">
                   {generatedTexts.title}
                 </div>
                 <button
-                  onClick={() => { navigator.clipboard.writeText(generatedTexts.title!); toast.success('Скопировано!') }}
-                  className="text-green-400 text-xs mt-1 hover:text-green-300"
+                  onClick={() => { navigator.clipboard.writeText(generatedTexts.title!.split('\n')[0]); toast.success('Заголовок скопирован') }}
+                  className="text-green-400 text-xs mt-1.5 hover:text-green-300"
                 >
-                  Скопировать
+                  Скопировать заголовок
                 </button>
               </div>
             )}
             {generatedTexts.description && (
               <div>
-                <div className="text-xs text-white/35 mb-1">📝 Описание товара</div>
-                <div className="bg-white/5 border border-white/8 rounded-xl px-3 py-2 text-sm text-white/80 leading-snug">
+                <div className="text-xs text-white/35 mb-1.5">📝 Описание товара</div>
+                <div className="bg-white/5 border border-white/8 rounded-xl px-3 py-2.5 text-xs text-white/70 leading-relaxed whitespace-pre-wrap font-mono max-h-48 overflow-y-auto">
                   {generatedTexts.description}
                 </div>
                 <button
-                  onClick={() => { navigator.clipboard.writeText(generatedTexts.description!); toast.success('Скопировано!') }}
-                  className="text-green-400 text-xs mt-1 hover:text-green-300"
+                  onClick={() => { navigator.clipboard.writeText(generatedTexts.description!); toast.success('Описание скопировано') }}
+                  className="text-green-400 text-xs mt-1.5 hover:text-green-300"
                 >
-                  Скопировать
+                  Скопировать описание
                 </button>
               </div>
             )}

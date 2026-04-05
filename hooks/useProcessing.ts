@@ -4,18 +4,17 @@ import { useState, useRef } from 'react'
 
 export type ProcessingState = 'idle' | 'starting' | 'processing' | 'done' | 'error'
 
-// Operations that go through KIE.ai API
+// Real AI via KIE.ai
 const KIE_OPERATIONS = ['remove_bg', 'upscale']
 
-// Operations handled client-side or mocked (resolve after delay)
-const MOCK_OPERATIONS: Record<string, string> = {
-  white_bg: 'Белый фон',
-  square_format: 'Квадрат 1:1',
-  vertical_creative: 'Вертикальный баннер',
-  cover: 'Обложка карточки',
-  gen_title: 'Заголовок товара',
-  gen_description: 'Описание товара',
-}
+// Client-side canvas processing (need source image)
+const CANVAS_OPERATIONS = ['white_bg', 'square_format']
+
+// Text template generation
+const TEXT_OPERATIONS = ['gen_title', 'gen_description']
+
+// Not yet implemented — skip silently and mark as "coming soon"
+const SOON_OPERATIONS = ['vertical_creative', 'cover']
 
 export interface TaskProgress {
   taskId: string
@@ -24,81 +23,103 @@ export interface TaskProgress {
   state: ProcessingState
   resultUrl?: string
   resultText?: string
+  isSoon?: boolean
 }
 
-// ─── Text generation helpers ──────────────────────────────────────────────────
+// ─── Canvas helpers ───────────────────────────────────────────────────────────
 
-const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  'Одежда и аксессуары': ['модный', 'стильный', 'качественный', 'универсальный'],
-  'Электроника': ['высокопроизводительный', 'надёжный', 'технологичный', 'мощный'],
-  'Дом и сад': ['практичный', 'долговечный', 'удобный', 'функциональный'],
-  'Красота и здоровье': ['натуральный', 'эффективный', 'профессиональный', 'безопасный'],
-  'Детские товары': ['безопасный', 'развивающий', 'яркий', 'прочный'],
-  'Спорт и отдых': ['профессиональный', 'прочный', 'лёгкий', 'эргономичный'],
-  'Автотовары': ['надёжный', 'качественный', 'универсальный', 'долговечный'],
-  'Продукты питания': ['натуральный', 'вкусный', 'свежий', 'полезный'],
-  'Книги и канцелярия': ['качественный', 'удобный', 'практичный', 'стильный'],
+async function loadImageViaProxy(url: string): Promise<ImageBitmap> {
+  const proxied = `/api/proxy-image?url=${encodeURIComponent(url)}`
+  const res = await fetch(proxied)
+  if (!res.ok) throw new Error('Could not load image')
+  const blob = await res.blob()
+  return createImageBitmap(blob)
 }
 
-const DELIVERY_PHRASES = [
-  'Быстрая доставка по всей России',
-  'Доставка за 1–3 дня по России',
-  'Доставка в любой регион РФ',
-]
-
-const QUALITY_PHRASES = [
-  'Сертифицированное качество',
-  'Проверенное качество',
-  'Оригинальный товар',
-  'Гарантия качества от производителя',
-]
-
-const RETURN_PHRASES = [
-  'Возврат в течение 14 дней',
-  'Возврат и обмен без вопросов',
-  'Лёгкий возврат через маркетплейс',
-]
-
-function pick<T>(arr: T[]): T {
-  return arr[Math.floor(Math.random() * arr.length)]
+async function canvasToSupabase(canvas: HTMLCanvasElement): Promise<string | null> {
+  return new Promise((resolve) => {
+    canvas.toBlob(async (blob) => {
+      if (!blob) { resolve(null); return }
+      const fd = new FormData()
+      fd.append('file', blob, 'result.png')
+      try {
+        const res = await fetch('/api/upload', { method: 'POST', body: fd })
+        const data = await res.json()
+        resolve(data.url ?? null)
+      } catch {
+        resolve(null)
+      }
+    }, 'image/png')
+  })
 }
 
+async function applyWhiteBg(imageUrl: string): Promise<string | null> {
+  try {
+    const img = await loadImageViaProxy(imageUrl)
+    const canvas = document.createElement('canvas')
+    canvas.width = img.width
+    canvas.height = img.height
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#ffffff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    ctx.drawImage(img, 0, 0)
+    return canvasToSupabase(canvas)
+  } catch {
+    return null
+  }
+}
+
+async function applySquareFormat(imageUrl: string): Promise<string | null> {
+  try {
+    const img = await loadImageViaProxy(imageUrl)
+    const size = Math.min(img.width, img.height)
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext('2d')!
+    const sx = (img.width - size) / 2
+    const sy = (img.height - size) / 2
+    ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size)
+    return canvasToSupabase(canvas)
+  } catch {
+    return null
+  }
+}
+
+// ─── Text generation ──────────────────────────────────────────────────────────
+
+// WB/Ozon use factual titles: [Brand] Product [Color] [Size/Spec]
+// Without product data we generate a structured template the seller fills in
 function generateTitle(productTitle: string, category?: string): string {
-  const kw = category ? CATEGORY_KEYWORDS[category] : undefined
-  const adj = kw ? pick(kw) : 'качественный'
-
-  // WB/Ozon style: noun phrase + key attribute + marketplace signal
-  const templates = [
-    `${productTitle} — ${adj}, купить с доставкой`,
-    `${productTitle} | ${adj} товар для дома и офиса`,
-    `${productTitle} — ${adj}, оригинал, в наличии`,
-    `${productTitle} | купить выгодно, быстрая доставка`,
-    `${productTitle} — ${pick(QUALITY_PHRASES).toLowerCase()}`,
+  const cat = category ? ` (${category})` : ''
+  // Clean title format close to real WB listings
+  const lines = [
+    `${productTitle}${cat}`,
+    ``,
+    `💡 Совет: для лучшего ранжирования добавьте бренд, цвет и ключевую характеристику.`,
+    `Пример: Samsung Микроволновая печь 23л, чёрная, 800 Вт`,
   ]
-  return pick(templates)
+  return lines.join('\n')
 }
 
 function generateDescription(productTitle: string, category?: string): string {
-  const kw = category ? CATEGORY_KEYWORDS[category] : undefined
-  const adj1 = kw ? pick(kw) : 'качественный'
-  const adj2 = kw ? pick(kw.filter(k => k !== adj1)) || 'надёжный' : 'надёжный'
-
-  const categoryNote = category
-    ? `Идеально подходит для категории «${category}».`
-    : 'Подходит для любых целей.'
-
+  const catLine = category ? `Тип: ${category}` : 'Тип: [указать]'
   return [
-    `✅ ${productTitle} — ${adj1} и ${adj2} товар от проверенного продавца.`,
+    `${productTitle}`,
     ``,
-    `📦 ${categoryNote}`,
+    `Характеристики:`,
+    `• ${catLine}`,
+    `• Бренд: [указать]`,
+    `• Цвет: [указать]`,
+    `• Материал: [указать]`,
+    `• Размер / объём: [указать]`,
+    `• Страна производства: [указать]`,
+    `• Комплектация: ${productTitle} — 1 шт., инструкция — 1 шт.`,
     ``,
-    `🔑 Преимущества:`,
-    `• ${pick(QUALITY_PHRASES)}`,
-    `• ${pick(DELIVERY_PHRASES)}`,
-    `• ${pick(RETURN_PHRASES)}`,
-    `• Упаковка защищает товар при транспортировке`,
+    `Описание:`,
+    `${productTitle} — [добавьте 2–3 предложения о товаре: для чего подходит, преимущества, особенности].`,
     ``,
-    `📞 Остались вопросы? Пишите в чат — ответим за 15 минут!`,
+    `⚠️ Замените всё в [скобках] на реальные данные вашего товара перед публикацией.`,
   ].join('\n')
 }
 
@@ -116,11 +137,12 @@ export function useProcessing() {
   }
 
   function checkAllDone(current: TaskProgress[]) {
-    const allDone = current.every(t => t.state === 'done' || t.state === 'error')
-    if (allDone && current.length > 0) setOverallState('done')
+    const relevant = current.filter(t => !t.isSoon)
+    const allDone = relevant.every(t => t.state === 'done' || t.state === 'error')
+    if (allDone && relevant.length > 0) setOverallState('done')
   }
 
-  function pollTask(taskId: string) {
+  function pollTask(taskId: string, onSuccess?: (resultUrl: string) => void) {
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/process?taskId=${taskId}`)
@@ -131,6 +153,7 @@ export function useProcessing() {
           updateTask(taskId, { state: 'done', resultUrl: data.resultUrl })
           if (data.resultUrl) {
             setResultUrls(prev => [...prev, data.resultUrl])
+            onSuccess?.(data.resultUrl)
           }
           setTasks(current => { checkAllDone(current); return current })
         } else if (data.state === 'fail') {
@@ -157,84 +180,124 @@ export function useProcessing() {
     setGeneratedTexts({})
     const newTasks: TaskProgress[] = []
 
+    const title = productTitle || 'Товар'
+
     // 1. Real KIE.ai operations
     for (const imageUrl of imageUrls) {
-      for (const operation of operations.filter(op => KIE_OPERATIONS.includes(op))) {
+      for (const op of operations.filter(o => KIE_OPERATIONS.includes(o))) {
         try {
           const res = await fetch('/api/process', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ operation, imageUrl }),
+            body: JSON.stringify({ operation: op, imageUrl }),
           })
           const data = await res.json()
           if (data.taskId) {
             newTasks.push({
               taskId: data.taskId,
-              operation,
-              label: operation === 'remove_bg' ? 'Убираем фон' : 'Улучшаем качество',
+              operation: op,
+              label: op === 'remove_bg' ? 'Убираем фон (AI)' : 'Улучшаем качество (AI)',
               state: 'processing',
             })
           }
-        } catch {
-          // skip failed starts
-        }
+        } catch { /* skip */ }
       }
     }
 
-    // 2. Mock operations — show as processing, then resolve after delay
-    for (const operation of operations.filter(op => op in MOCK_OPERATIONS)) {
-      const mockId = `mock_${operation}_${Date.now()}`
+    // 2. Canvas operations — start as "processing", resolve after KIE remove_bg or from source
+    for (const op of operations.filter(o => CANVAS_OPERATIONS.includes(o))) {
+      const mockId = `canvas_${op}_${Date.now()}`
       newTasks.push({
         taskId: mockId,
-        operation,
-        label: MOCK_OPERATIONS[operation],
+        operation: op,
+        label: op === 'white_bg' ? 'Добавляем белый фон...' : 'Обрезаем в квадрат...',
         state: 'processing',
+      })
+    }
+
+    // 3. Text generation — instant
+    for (const op of operations.filter(o => TEXT_OPERATIONS.includes(o))) {
+      const mockId = `text_${op}_${Date.now()}`
+      newTasks.push({
+        taskId: mockId,
+        operation: op,
+        label: op === 'gen_title' ? 'Заголовок товара' : 'Описание товара',
+        state: 'processing',
+      })
+    }
+
+    // 4. "Coming soon" operations — add but mark as isSoon, don't block overall state
+    for (const op of operations.filter(o => SOON_OPERATIONS.includes(o))) {
+      const mockId = `soon_${op}_${Date.now()}`
+      newTasks.push({
+        taskId: mockId,
+        operation: op,
+        label: op === 'cover' ? 'Обложка карточки' : 'Вертикальный баннер',
+        state: 'done',
+        resultText: 'Скоро — функция в разработке',
+        isSoon: true,
       })
     }
 
     setTasks(newTasks)
     setOverallState('processing')
 
-    // Start polling for real tasks
-    for (const task of newTasks.filter(t => !t.taskId.startsWith('mock_'))) {
+    // Start polling for KIE tasks
+    for (const task of newTasks.filter(t => !t.taskId.startsWith('canvas_') && !t.taskId.startsWith('text_') && !t.taskId.startsWith('soon_'))) {
       pollTask(task.taskId)
     }
 
-    // Resolve mock tasks after delay
-    const mockTasks = newTasks.filter(t => t.taskId.startsWith('mock_'))
-    if (mockTasks.length > 0) {
+    // Text ops — resolve after 1 second
+    const textTasks = newTasks.filter(t => t.taskId.startsWith('text_'))
+    if (textTasks.length > 0) {
       setTimeout(() => {
         const texts: { title?: string; description?: string } = {}
-        const title = productTitle || 'Товар'
-
-        for (const task of mockTasks) {
-          let resultText: string | undefined
-
+        for (const task of textTasks) {
           if (task.operation === 'gen_title') {
-            resultText = generateTitle(title, productCategory)
-            texts.title = resultText
+            const t = generateTitle(title, productCategory)
+            texts.title = t
+            updateTask(task.taskId, { state: 'done', resultText: t })
           } else if (task.operation === 'gen_description') {
-            resultText = generateDescription(title, productCategory)
-            texts.description = resultText
-          } else if (task.operation === 'white_bg') {
-            resultText = `Белый фон применён к ${imageUrls.length} фото`
-          } else if (task.operation === 'square_format') {
-            resultText = `Квадратный формат 1:1 применён к ${imageUrls.length} фото`
-          } else if (task.operation === 'vertical_creative') {
-            resultText = `Вертикальный баннер 4:5 создан для ${imageUrls.length} фото`
-          } else if (task.operation === 'cover') {
-            resultText = `Обложка карточки создана (${imageUrls.length} вариант${imageUrls.length > 1 ? 'а' : ''})`
+            const d = generateDescription(title, productCategory)
+            texts.description = d
+            updateTask(task.taskId, { state: 'done', resultText: d })
           }
-
-          updateTask(task.taskId, { state: 'done', resultText })
         }
-
         setGeneratedTexts(texts)
         setTasks(current => { checkAllDone(current); return current })
-      }, 4000)
+      }, 1000)
     }
 
-    if (newTasks.length === 0) setOverallState('done')
+    // Canvas ops — process source images immediately
+    const canvasTasks = newTasks.filter(t => t.taskId.startsWith('canvas_'))
+    for (const task of canvasTasks) {
+      // Process all source images for this op
+      ;(async () => {
+        const results: string[] = []
+        for (const imageUrl of imageUrls) {
+          let url: string | null = null
+          if (task.operation === 'white_bg') {
+            url = await applyWhiteBg(imageUrl)
+          } else if (task.operation === 'square_format') {
+            url = await applySquareFormat(imageUrl)
+          }
+          if (url) results.push(url)
+        }
+
+        if (results.length > 0) {
+          setResultUrls(prev => [...prev, ...results])
+          updateTask(task.taskId, { state: 'done', resultUrl: results[0] })
+        } else {
+          updateTask(task.taskId, {
+            state: 'error',
+            resultText: 'Не удалось обработать — попробуйте ещё раз',
+          })
+        }
+        setTasks(current => { checkAllDone(current); return current })
+      })()
+    }
+
+    if (newTasks.filter(t => !t.isSoon).length === 0) setOverallState('done')
   }
 
   return { tasks, overallState, resultUrls, generatedTexts, startProcessing }

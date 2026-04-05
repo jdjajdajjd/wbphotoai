@@ -238,16 +238,23 @@ export function NewProjectScreen() {
                 <button
                   key={op.id}
                   type="button"
-                  onClick={() => toggleOp(op.id)}
-                  className={`p-2.5 rounded-xl border text-left transition-all duration-150 active:scale-[0.97] ${
-                    isSelected
+                  onClick={() => op.status !== 'soon' && toggleOp(op.id)}
+                  disabled={op.status === 'soon'}
+                  className={`p-2.5 rounded-xl border text-left transition-all duration-150 active:scale-[0.97] relative ${
+                    op.status === 'soon'
+                      ? 'bg-white/2 border-white/5 text-white/20 cursor-not-allowed opacity-50'
+                      : isSelected
                       ? 'bg-green-500/15 border-green-500/40 text-green-300'
                       : 'bg-white/4 border-white/8 text-white/50 hover:border-white/15'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-base">{op.icon}</span>
-                    <span className="text-[9px] text-white/30">{op.credits} кр.</span>
+                    {op.status === 'soon' ? (
+                      <span className="text-[9px] text-orange-400/60 font-medium">скоро</span>
+                    ) : (
+                      <span className="text-[9px] text-white/30">{op.credits} кр.</span>
+                    )}
                   </div>
                   <div className="text-xs font-medium leading-tight">{op.label}</div>
                   <div className="text-[10px] text-white/30 mt-0.5 leading-tight">{op.hint}</div>

@@ -1,14 +1,15 @@
 import type { Operation } from '@/types'
 
-export const OPERATIONS: { id: Operation; label: string; hint: string; credits: number; icon: string }[] = [
-  { id: 'remove_bg', label: 'Убрать фон', hint: 'Прозрачный PNG для маркетплейса', credits: 1, icon: '✂️' },
-  { id: 'white_bg', label: 'Белый фон', hint: 'Чистый белый фон вместо прозрачного', credits: 1, icon: '⬜' },
-  { id: 'upscale', label: 'Улучшить качество', hint: 'Увеличить резкость и детали фото', credits: 1, icon: '✨' },
-  { id: 'square_format', label: 'Квадрат 1:1', hint: 'Обрезка под формат карточки WB/Ozon', credits: 1, icon: '⬛' },
-  { id: 'vertical_creative', label: 'Вертикальный баннер', hint: 'Рекламный креатив 4:5 для историй', credits: 2, icon: '📱' },
-  { id: 'cover', label: 'Обложка карточки', hint: 'Главное фото с текстом и брендингом', credits: 2, icon: '🖼️' },
-  { id: 'gen_title', label: 'Заголовок товара', hint: 'SEO-заголовок для WB/Ozon', credits: 1, icon: '✍️' },
-  { id: 'gen_description', label: 'Описание товара', hint: 'Продающий текст с характеристиками', credits: 2, icon: '📝' },
+// status: 'live' = real AI, 'canvas' = client-side image processing, 'text' = text template, 'soon' = not yet implemented
+export const OPERATIONS: { id: Operation; label: string; hint: string; credits: number; icon: string; status: 'live' | 'canvas' | 'text' | 'soon' }[] = [
+  { id: 'remove_bg', label: 'Убрать фон', hint: 'AI удаляет фон — прозрачный PNG', credits: 1, icon: '✂️', status: 'live' },
+  { id: 'white_bg', label: 'Белый фон', hint: 'AI удаляет фон и добавляет белый', credits: 1, icon: '⬜', status: 'canvas' },
+  { id: 'upscale', label: 'Улучшить качество', hint: 'AI увеличивает резкость и детали', credits: 1, icon: '✨', status: 'live' },
+  { id: 'square_format', label: 'Квадрат 1:1', hint: 'Обрезка по центру под WB/Ozon', credits: 1, icon: '⬛', status: 'canvas' },
+  { id: 'gen_title', label: 'Заголовок товара', hint: 'Шаблон заголовка в формате WB/Ozon', credits: 1, icon: '✍️', status: 'text' },
+  { id: 'gen_description', label: 'Описание товара', hint: 'Шаблон описания с характеристиками', credits: 2, icon: '📝', status: 'text' },
+  { id: 'vertical_creative', label: 'Вертикальный баннер', hint: 'Рекламный баннер 4:5 — скоро', credits: 2, icon: '📱', status: 'soon' },
+  { id: 'cover', label: 'Обложка карточки', hint: 'Обложка с текстом и брендингом — скоро', credits: 2, icon: '🖼️', status: 'soon' },
 ]
 
 export const CATEGORIES = [
