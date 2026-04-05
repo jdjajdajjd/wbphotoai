@@ -16,7 +16,7 @@ import type { Operation } from '@/types'
 
 export function NewProjectScreen() {
   const router = useRouter()
-  const { addProject } = useStore()
+  const { addProject, currentUser, updateCredits } = useStore()
 
   const [title, setTitle] = useState('')
   const [category, setCategory] = useState('')
@@ -85,6 +85,7 @@ export function NewProjectScreen() {
       }
 
       setUploadProgress('')
+      const hasEnoughCredits = (currentUser?.credits ?? 0) >= totalCredits
       const newProject = {
         id: `proj_${Date.now()}`,
         userId: 'user_demo',
@@ -94,15 +95,22 @@ export function NewProjectScreen() {
         selectedOperations: selectedOps,
         packageId: selectedPackageId,
         package: selectedPkg,
-        priceRub: selectedPkg.priceRub,
-        status: 'waiting_payment' as const,
+        priceRub: hasEnoughCredits ? 0 : selectedPkg.priceRub,
+        status: (hasEnoughCredits ? 'paid' : 'waiting_payment') as 'paid' | 'waiting_payment',
         resultImages: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
       addProject(newProject)
-      toast.success('Проект создан!', { icon: '🚀' })
-      router.push(`/payments?package=${selectedPackageId}&project=${newProject.id}`)
+
+      if (hasEnoughCredits) {
+        updateCredits((currentUser?.credits ?? 0) - totalCredits)
+        toast.success('Проект создан! Кредиты списаны.', { icon: '✅' })
+        router.push(`/projects/${newProject.id}`)
+      } else {
+        toast.success('Проект создан!', { icon: '🚀' })
+        router.push(`/payments?package=${selectedPackageId}&project=${newProject.id}`)
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Ошибка при создании проекта'
       toast.error(msg)
@@ -241,6 +249,7 @@ export function NewProjectScreen() {
                     <span className="text-[9px] text-white/30">{op.credits} кр.</span>
                   </div>
                   <div className="text-xs font-medium leading-tight">{op.label}</div>
+                  <div className="text-[10px] text-white/30 mt-0.5 leading-tight">{op.hint}</div>
                 </button>
               )
             })}
@@ -286,22 +295,42 @@ export function NewProjectScreen() {
         style={{ paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))' }}
       >
         <GlassCard padding="md" className="border-green-500/20">
-          <div className="flex items-center justify-between mb-3 text-sm">
-            <span className="text-white/50">К оплате</span>
-            <div className="flex items-center gap-2">
-              <CreditBadge credits={totalCredits} size="sm" />
-              <span className="text-xl font-bold text-white">{formatRub(selectedPkg.priceRub)}</span>
-            </div>
-          </div>
-          <GradientButton
-            fullWidth
-            size="lg"
-            onClick={handleSubmit}
-            loading={isSubmitting}
-            disabled={files.length === 0 || !title.trim()}
-          >
-            {uploadProgress || (<>Перейти к оплате <ArrowRight className="w-4 h-4" /></>)}
-          </GradientButton>
+          {(currentUser?.credits ?? 0) >= totalCredits ? (
+            <>
+              <div className="flex items-center justify-between mb-3 text-sm">
+                <span className="text-white/50">Спишем кредиты</span>
+                <CreditBadge credits={totalCredits} size="sm" />
+              </div>
+              <GradientButton
+                fullWidth
+                size="lg"
+                onClick={handleSubmit}
+                loading={isSubmitting}
+                disabled={files.length === 0 || !title.trim()}
+              >
+                {uploadProgress || (<><Zap className="w-4 h-4" /> Запустить ({totalCredits} кр.)</>)}
+              </GradientButton>
+            </>
+          ) : (
+            <>
+              <div className="flex items-center justify-between mb-3 text-sm">
+                <span className="text-white/50">К оплате</span>
+                <div className="flex items-center gap-2">
+                  <CreditBadge credits={totalCredits} size="sm" />
+                  <span className="text-xl font-bold text-white">{formatRub(selectedPkg.priceRub)}</span>
+                </div>
+              </div>
+              <GradientButton
+                fullWidth
+                size="lg"
+                onClick={handleSubmit}
+                loading={isSubmitting}
+                disabled={files.length === 0 || !title.trim()}
+              >
+                {uploadProgress || (<>Перейти к оплате <ArrowRight className="w-4 h-4" /></>)}
+              </GradientButton>
+            </>
+          )}
         </GlassCard>
       </div>
     </div>

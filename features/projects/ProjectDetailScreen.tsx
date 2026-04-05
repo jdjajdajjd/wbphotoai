@@ -15,7 +15,7 @@ export function ProjectDetailScreen({ projectId }: { projectId: string }) {
   const router = useRouter()
   const { projects, updateProject } = useStore()
   const project = projects.find((p) => p.id === projectId) ?? projects[0]
-  const { tasks, overallState, resultUrls, startProcessing } = useProcessing()
+  const { tasks, overallState, resultUrls, generatedTexts, startProcessing } = useProcessing()
 
   if (!project) {
     return (
@@ -42,7 +42,7 @@ export function ProjectDetailScreen({ projectId }: { projectId: string }) {
     updateProject(projectId, { status: 'processing' })
     toast.info('Отправляем в обработку...', { icon: '🔄' })
 
-    await startProcessing(project.sourceImages, project.selectedOperations)
+    await startProcessing(project.sourceImages, project.selectedOperations, project.title)
 
     // will be set to done via overallState watcher below
     toast.success('Обработка запущена! Ожидайте результатов.', { icon: '✨' })
@@ -205,6 +205,41 @@ export function ProjectDetailScreen({ projectId }: { projectId: string }) {
               <Download className="w-4 h-4" />
               Открыть результаты
             </GradientButton>
+          </GlassCard>
+        )}
+
+        {/* Generated texts */}
+        {(generatedTexts.title || generatedTexts.description) && (
+          <GlassCard padding="md">
+            <div className="text-xs text-white/40 font-medium mb-3">Сгенерированный контент</div>
+            {generatedTexts.title && (
+              <div className="mb-3">
+                <div className="text-xs text-white/35 mb-1">✍️ Заголовок товара</div>
+                <div className="bg-white/5 border border-white/8 rounded-xl px-3 py-2 text-sm text-white/80 leading-snug">
+                  {generatedTexts.title}
+                </div>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(generatedTexts.title!); toast.success('Скопировано!') }}
+                  className="text-green-400 text-xs mt-1 hover:text-green-300"
+                >
+                  Скопировать
+                </button>
+              </div>
+            )}
+            {generatedTexts.description && (
+              <div>
+                <div className="text-xs text-white/35 mb-1">📝 Описание товара</div>
+                <div className="bg-white/5 border border-white/8 rounded-xl px-3 py-2 text-sm text-white/80 leading-snug">
+                  {generatedTexts.description}
+                </div>
+                <button
+                  onClick={() => { navigator.clipboard.writeText(generatedTexts.description!); toast.success('Скопировано!') }}
+                  className="text-green-400 text-xs mt-1 hover:text-green-300"
+                >
+                  Скопировать
+                </button>
+              </div>
+            )}
           </GlassCard>
         )}
 
